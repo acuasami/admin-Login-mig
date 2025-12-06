@@ -127,11 +127,25 @@ def dashboard():
 # Lógica del cuaderno de procesamiento (admin/Preprocesamieto (1) - copia.ipynb)
 def process_data_for_db(file_stream):
     try:
-        # Cargar datos con codificación latin1 para manejar caracteres especiales
+        # 1. Intento: latin1, delimitador por defecto (coma)
         df = pd.read_csv(file_stream, encoding='latin1')
+    except pd.errors.ParserError:
+        # 2. Error de tokenizing. Intentar con delimitador ';'
+        file_stream.seek(0) # Regresar al inicio del stream para re-lectura
+        try:
+            df = pd.read_csv(file_stream, encoding='latin1', sep=';')
+        except UnicodeDecodeError:
+            file_stream.seek(0) # Regresar al inicio
+            df = pd.read_csv(file_stream, encoding='utf8', sep=';')
     except UnicodeDecodeError:
-        df = pd.read_csv(file_stream, encoding='utf8') # Intento con utf8 si falla
-
+        # 3. Error de encoding (pero no tokenizing). Intentar con utf8.
+        file_stream.seek(0)
+        try:
+            df = pd.read_csv(file_stream, encoding='utf8')
+        except pd.errors.ParserError:
+            # 4. Si utf8 falla con tokenizing, intentamos con delimitador ';'
+            file_stream.seek(0)
+            df = pd.read_csv(file_stream, encoding='utf8', sep=';')
     # Pasos de pre-procesamiento idénticos al cuaderno:
 
     # 1. Filtrar por el año máximo (2025)
@@ -304,4 +318,5 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
 
