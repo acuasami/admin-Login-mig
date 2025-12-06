@@ -122,10 +122,9 @@ def dashboard():
 
 # --- LÓGICA DE PROCESAMIENTO Y CARGA DE DATOS ---
 
-# Lógica del cuaderno de procesamiento (admin/Preprocesamieto (1) - copia.ipynb)
 def process_data_for_db(file_stream):
     try:
-        # --- LECTURA DE CSV ROBUSTA (Incluye solución a ParserError/Tokenizing) ---
+        # --- LECTURA DE CSV ROBUSTA (Solución a ParserError/Tokenizing) ---
         # 1. Intento: latin1, delimitador por defecto (coma)
         df = pd.read_csv(file_stream, encoding='latin1')
         
@@ -147,37 +146,30 @@ def process_data_for_db(file_stream):
             file_stream.seek(0)
             df = pd.read_csv(file_stream, encoding='utf8', sep=';')
     except Exception as e:
-        # Cualquier otro error de lectura
         raise Exception(f"Error grave al leer el archivo CSV: {e}")
 
-    # FIX: Limpiar nombres de columnas para evitar problemas de espacios
+    # FIX 1: Limpiar nombres de columnas
     df.columns = df.columns.astype(str).str.strip() 
 
-    # NUEVO FIX: Búsqueda y estandarización del nombre de la columna 'Año' a 'Ano'
-    col_to_rename = None
+    # FIX 2: Búsqueda y estandarización forzada de la primera columna a 'Ano'
+    if len(df.columns) == 0:
+        raise Exception("El archivo CSV no tiene columnas. Verifique que el archivo no esté vacío o malformado.")
+
+    first_col_name = df.columns[0]
     
-    # Buscar la columna que contiene la referencia al año ('Año', 'Ano', o formas corruptas)
-    for col in df.columns:
-        # Limpiar acentos y espacios para una búsqueda flexible
-        col_lower = col.lower().replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u').replace(' ', '')
-        
-        # Buscar "año", "ano" o su forma corrupta '\xa3o' o '\xf1o'
-        if 'año' == col_lower or 'ano' == col_lower or '\xa3o' in col or '\xf1o' in col:
-            col_to_rename = col
-            break
+    # La columna 'Año' debe ser la primera. La renombramos directamente a 'Ano'
+    # para superar la corrupción de la 'ñ' sin importar su nombre original.
+    if first_col_name != 'Ano':
+        df = df.rename(columns={first_col_name: 'Ano'})
 
-    if col_to_rename:
-        # Renombrar la columna encontrada al string literal seguro y simple 'Ano'
-        df = df.rename(columns={col_to_rename: 'Ano'})
-    else:
-        # Si el error persiste, levantamos una excepción más específica
-        raise KeyError("La columna del año (esperada 'Año' o 'Ano') no se encontró en el archivo CSV. Verifique que exista una columna con el año al inicio del encabezado.") 
+    if 'Ano' not in df.columns:
+        raise KeyError("Error crítico: No se pudo identificar ni renombrar la columna del año a 'Ano'.") 
 
-    # Pasos de pre-procesamiento idénticos al cuaderno:
-
-    # 1. Filtrar por el año máximo (2025)
-    max_anio = df['Ano'].max() # CAMBIO A 'Ano'
-    df = df[df['Ano'] == max_anio].copy() # CAMBIO A 'Ano'
+    # Pasos de pre-procesamiento idénticos al cuaderno, usando 'Ano'
+    
+    # 1. Filtrar por el año máximo
+    max_anio = df['Ano'].max()
+    df = df[df['Ano'] == max_anio].copy()
 
     # Lista de meses para identificar los meses a conservar
     meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -186,7 +178,7 @@ def process_data_for_db(file_stream):
     # Identificar meses válidos y conservar los últimos 3 con data
     meses_validos = [mes for mes in meses
                      if mes in df.columns
-                     and df[mes].astype(float).sum() > 0] # Asegurar que tengan datos (suma > 0)
+                     and df[mes].astype(float).sum() > 0] 
     ultimos_3_meses = meses_validos[-3:] if len(meses_validos) >= 3 else meses_validos
     
     # Eliminar columnas de meses no deseados
@@ -276,7 +268,7 @@ def process_data_for_db(file_stream):
         "Entidad": "nom_estado",
         "Municipio": "nom_municipio",
         "fecha": "fecha_registro",
-    }).drop(columns=["Total_Delitos", "nom_estado", "nom_municipio"]) # Se eliminan para el insert de 'delitos'
+    }).drop(columns=["Total_Delitos", "nom_estado", "nom_municipio"]) 
 
     df_delitos['robos'] = df_delitos['robos'].astype(int)
     df_delitos['secuestros'] = df_delitos['secuestros'].astype(int)
@@ -307,7 +299,11 @@ def upload_csv():
     except UnicodeDecodeError:
         file.stream.seek(0) # Volver al inicio del stream
         # Intento de lectura con utf-8
-        file_content = file.stream.read().decode("utf-8")
+        try:
+            file_content = file.stream.read().decode("utf-8")
+        except UnicodeDecodeError as e:
+            flash(f'Error de codificación al leer el archivo. Intente guardarlo como CSV UTF-8 o Latin-1: {e}', 'danger')
+            return redirect(url_for('dashboard'))
         
     file_stream.write(file_content)
     file_stream.seek(0) # Resetear la posición del puntero para pandas
@@ -348,3 +344,4 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
