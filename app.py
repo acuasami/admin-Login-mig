@@ -15,16 +15,16 @@ import hmac
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'una_clave_secreta_muy_fuerte_aqui') # Cambiar por una clave más segura
 
+# Usar la URI de tu cuaderno de railway.ipynb
 uri = 'postgresql://postgres:KAGJhRklTcsevGqKEgCNPfmdDiGzsLyQ@switchyard.proxy.rlwy.net:13155/railway'
 result = urlparse(uri)
-DB_URI= {
+DB_URI = {
     'user': result.username,
     'password': result.password,
     'host': result.hostname,
     'port': result.port,
     'dbname': result.path.lstrip('/')
 }
-
 # Función para obtener la conexión a la DB
 def get_db_connection():
     try:
@@ -82,8 +82,11 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # Uso de hmac.compare_digest (ESTO SOLUCIONA EL ERROR)
-        if hmac.compare_digest(username, ADMIN_USER) and hmac.compare_digest(password, ADMIN_PASS):
+        # FIX: Codificar a bytes antes de usar hmac.compare_digest para soportar la 'ñ'
+        user_match = hmac.compare_digest(username.encode('utf-8'), ADMIN_USER.encode('utf-8'))
+        pass_match = hmac.compare_digest(password.encode('utf-8'), ADMIN_PASS.encode('utf-8'))
+        
+        if user_match and pass_match:
             session['logged_in'] = True
             flash('Inicio de sesión exitoso.', 'success')
             return redirect(url_for('dashboard'))
@@ -147,10 +150,9 @@ def process_data_for_db(file_stream):
              'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
     # Identificar meses válidos y conservar los últimos 3 con data
-    # (Se utiliza sum() > 0 para asegurar que contengan datos numéricos)
     meses_validos = [mes for mes in meses
                      if mes in df.columns
-                     and df[mes].astype(float).sum() > 0] 
+                     and df[mes].astype(float).sum() > 0] # Asegurar que tengan datos (suma > 0)
     ultimos_3_meses = meses_validos[-3:] if len(meses_validos) >= 3 else meses_validos
     
     # Eliminar columnas de meses no deseados
@@ -184,7 +186,6 @@ def process_data_for_db(file_stream):
     df_agrupado = df.groupby(columnas_agrupacion, dropna=False).sum().reset_index()
 
     # 6. Melt: pasar meses a formato largo
-    # Se usan los meses detectados dinámicamente: ultimos_3_meses
     df_long = df_agrupado.melt(
         id_vars=["Entidad", "Cve. Municipio", "Municipio", "Tipo de delito"],
         value_vars=ultimos_3_meses,
@@ -310,4 +311,3 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-
