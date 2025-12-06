@@ -154,7 +154,24 @@ def process_data_for_db(file_stream):
         raise Exception(f"Error grave al leer el archivo CSV: {e}")
 
     # FIX: Limpiar nombres de columnas para evitar problemas de espacios
-    df.columns = df.columns.str.strip()
+    df.columns = df.columns.astype(str).str.strip() # Asegurar que sean strings y limpiar espacios
+
+    # **NUEVO FIX**: Asegurar que la columna 'Año' se detecte y renombrar si es necesario
+    if 'Año' not in df.columns:
+        # Buscar la columna que contenga 'Año' o 'A\u00f1o' (la ñ en Unicode)
+        col_to_rename = None
+        for col in df.columns:
+            # Comprueba si la columna contiene el literal 'Año' o su equivalente Unicode '\u00f1'
+            if 'Año' in col or 'A\u00f1o' in col or col.lower() == 'año':
+                col_to_rename = col
+                break
+        
+        if col_to_rename:
+            # Renombrar la columna encontrada al string literal correcto 'Año'
+            df = df.rename(columns={col_to_rename: 'Año'})
+        else:
+            # Si el error persiste, levantamos una excepción más específica
+            raise KeyError("La columna 'Año' (o su equivalente) no se encontró después de la limpieza. Verifique el nombre exacto de la columna 'Año' en su archivo CSV.") 
 
     # Pasos de pre-procesamiento idénticos al cuaderno:
 
@@ -328,5 +345,6 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
 
 
