@@ -7,9 +7,8 @@ import psycopg2
 from urllib.parse import urlparse
 from flask import Flask, render_template, request, redirect, url_for, session, flash, jsonify
 from sklearn.cluster import KMeans
-# Importación CORREGIDA: se reemplaza 'safe_str_cmp' por 'hmac.compare_digest'
 import hmac 
-from pandas.errors import ParserError # Importar error específico para lectura de CSV
+from pandas.errors import ParserError 
 
 # --- CONFIGURACIÓN Y CONEXIÓN A LA BASE DE DATOS ---
 
@@ -158,7 +157,6 @@ def process_data_for_db(file_stream):
     first_col_name = df.columns[0]
     
     # La columna 'Año' debe ser la primera. La renombramos directamente a 'Ano'
-    # para superar la corrupción de la 'ñ' sin importar su nombre original.
     if first_col_name != 'Ano':
         df = df.rename(columns={first_col_name: 'Ano'})
 
@@ -176,6 +174,7 @@ def process_data_for_db(file_stream):
              'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
     # Identificar meses válidos y conservar los últimos 3 con data
+    # Un mes es "válido" si la suma de los delitos en ese mes es mayor a cero.
     meses_validos = [mes for mes in meses
                      if mes in df.columns
                      and df[mes].astype(float).sum() > 0] 
@@ -218,6 +217,10 @@ def process_data_for_db(file_stream):
         var_name="Mes",
         value_name="Cantidad"
     )
+    
+    # *** NUEVO FILTRO DE FECHAS (solución a su problema) ***
+    # Esto asegura que solo se procesen registros con un valor de delitos > 0 para ese mes
+    df_long = df_long[df_long['Cantidad'].astype(float) > 0].copy()
 
     # Diccionario meses
     meses_num = {
@@ -344,4 +347,5 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
 
