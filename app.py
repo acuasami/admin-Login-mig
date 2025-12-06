@@ -9,6 +9,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from sklearn.cluster import KMeans
 # Importación CORREGIDA: se reemplaza 'safe_str_cmp' por 'hmac.compare_digest'
 import hmac 
+from pandas.errors import ParserError # Importar error específico para lectura de CSV
 
 # --- CONFIGURACIÓN Y CONEXIÓN A LA BASE DE DATOS ---
 
@@ -127,10 +128,12 @@ def dashboard():
 # Lógica del cuaderno de procesamiento (admin/Preprocesamieto (1) - copia.ipynb)
 def process_data_for_db(file_stream):
     try:
+        # --- LECTURA DE CSV ROBUSTA (Incluye solución a ParserError/Tokenizing) ---
         # 1. Intento: latin1, delimitador por defecto (coma)
         df = pd.read_csv(file_stream, encoding='latin1')
-    except pd.errors.ParserError:
-        # 2. Error de tokenizing. Intentar con delimitador ';'
+        
+    except ParserError:
+        # 2. Error de tokenizing/delimitador. Intentar con delimitador ';'
         file_stream.seek(0) # Regresar al inicio del stream para re-lectura
         try:
             df = pd.read_csv(file_stream, encoding='latin1', sep=';')
@@ -138,14 +141,21 @@ def process_data_for_db(file_stream):
             file_stream.seek(0) # Regresar al inicio
             df = pd.read_csv(file_stream, encoding='utf8', sep=';')
     except UnicodeDecodeError:
-        # 3. Error de encoding (pero no tokenizing). Intentar con utf8.
+        # 3. Error de encoding. Intentar con utf8.
         file_stream.seek(0)
         try:
             df = pd.read_csv(file_stream, encoding='utf8')
-        except pd.errors.ParserError:
+        except ParserError:
             # 4. Si utf8 falla con tokenizing, intentamos con delimitador ';'
             file_stream.seek(0)
             df = pd.read_csv(file_stream, encoding='utf8', sep=';')
+    except Exception as e:
+        # Cualquier otro error de lectura
+        raise Exception(f"Error grave al leer el archivo CSV: {e}")
+
+    # FIX: Limpiar nombres de columnas para evitar problemas de espacios
+    df.columns = df.columns.str.strip()
+
     # Pasos de pre-procesamiento idénticos al cuaderno:
 
     # 1. Filtrar por el año máximo (2025)
@@ -164,7 +174,7 @@ def process_data_for_db(file_stream):
     
     # Eliminar columnas de meses no deseados
     columnas_a_eliminar = [mes for mes in meses if mes in df.columns and mes not in ultimos_3_meses]
-    df = df.drop(columns=columnas_a_eliminar)
+    df = df.drop(columns=columnas_a_eliminar, errors='ignore')
 
     # 2. Filtrar por Tipo de delito: Secuestro y Robo
     df = df[df['Tipo de delito'].isin(['Secuestro', 'Robo'])].copy()
