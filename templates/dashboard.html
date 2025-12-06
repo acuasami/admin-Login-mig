@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard Administrador</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f8f8f8; }
+        h1, h2 { color: #333; }
+        .container { max-width: 1200px; margin: auto; }
+        .flash { padding: 10px; margin-bottom: 15px; border-radius: 4px; text-align: center; }
+        .flash.success { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
+        .flash.danger { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+        
+        /* Estilos de la tabla */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #fff; box-shadow: 0 2px 3px rgba(0,0,0,0.1); }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #5cb85c; color: white; }
+        
+        /* Estilos de la carga de archivos */
+        .upload-section { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); margin-top: 30px; }
+        .upload-section h3 { margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .btn-upload { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-upload:hover { background-color: #0056b3; }
+        .logout-btn { float: right; background-color: #f44336; color: white; padding: 8px 15px; text-decoration: none; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('logout') }}" class="logout-btn">Cerrar Sesión</a>
+        <h1>Panel de Administración</h1>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="upload-section">
+            <h2>Carga y Procesamiento de Datos de Delitos</h2>
+            <p>Suba el archivo CSV (`Municipal-Delitos...`) para procesar (K-Means) y cargar los resultados a la tabla "delitos" (registros de crimen por municipio/fecha).</p>
+            <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".csv" required>
+                <button type="submit" class="btn-upload">Subir y Procesar CSV</button>
+            </form>
+        </div>
+
+        <hr>
+
+        <h2>Datos de la Tabla "ongs" de Railway</h2>
+        {% if ongs_data %}
+            <table>
+                <thead>
+                    <tr>
+                        {% for col in ongs_cols %}
+                            <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in ongs_data %}
+                        <tr>
+                            {% for item in row %}
+                                <td>{{ item }}</td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No se encontraron datos en la tabla 'ongs' o hubo un error de conexión/consulta. Verifique la tabla y sus permisos.</p>
+        {% endif %}
+
+    </div>
+</body>
+</html>
