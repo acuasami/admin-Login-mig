@@ -3,3 +3,5 @@ pandas
 scikit-learn
 psycopg2-binary
 numpy
+gunicorn
+
