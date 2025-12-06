@@ -16,15 +16,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'una_clave_secreta_muy_fuerte_aqui') # Cambiar por una clave más segura
 
 # Usar la URI de tu cuaderno de railway.ipynb
-uri = 'postgresql://postgres:KAGJhRklTcsevGqKEgCNPfmdDiGzsLyQ@switchyard.proxy.rlwy.net:13155/railway'
-result = urlparse(uri)
-DB_URI = {
-    'user': result.username,
-    'password': result.password,
-    'host': result.hostname,
-    'port': result.port,
-    'dbname': result.path.lstrip('/')
-}
+DB_URI = 'postgresql://postgres:KAGJhRklTcsevGqKEgCNPfmdDiGzsLyQ@switchyard.proxy.rlwy.net:13155/railway' #
+
 # Función para obtener la conexión a la DB
 def get_db_connection():
     try:
@@ -311,3 +304,4 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
+
