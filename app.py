@@ -41,8 +41,6 @@ def create_delitos_table():
     if conn:
         try:
             cur = conn.cursor()
-            # Se usa 'delitos' como nombre de tabla más apropiado para los datos
-            # que contienen los registros de crímenes, aunque el usuario mencionó 'fecha'.
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS delitos (
                     id_fecha SERIAL PRIMARY KEY,
@@ -76,7 +74,6 @@ def login():
         username = request.form.get('username')
         password = request.form.get('password')
         
-        # FIX: Codificar a bytes antes de usar hmac.compare_digest para soportar la 'ñ'
         user_match = hmac.compare_digest(username.encode('utf-8'), ADMIN_USER.encode('utf-8'))
         pass_match = hmac.compare_digest(password.encode('utf-8'), ADMIN_PASS.encode('utf-8'))
         
@@ -154,30 +151,33 @@ def process_data_for_db(file_stream):
         raise Exception(f"Error grave al leer el archivo CSV: {e}")
 
     # FIX: Limpiar nombres de columnas para evitar problemas de espacios
-    df.columns = df.columns.astype(str).str.strip() # Asegurar que sean strings y limpiar espacios
+    df.columns = df.columns.astype(str).str.strip() 
 
-    # **NUEVO FIX**: Asegurar que la columna 'Año' se detecte y renombrar si es necesario
-    if 'Año' not in df.columns:
-        # Buscar la columna que contenga 'Año' o 'A\u00f1o' (la ñ en Unicode)
-        col_to_rename = None
-        for col in df.columns:
-            # Comprueba si la columna contiene el literal 'Año' o su equivalente Unicode '\u00f1'
-            if 'Año' in col or 'A\u00f1o' in col or col.lower() == 'año':
-                col_to_rename = col
-                break
+    # NUEVO FIX: Búsqueda y estandarización del nombre de la columna 'Año' a 'Ano'
+    col_to_rename = None
+    
+    # Buscar la columna que contiene la referencia al año ('Año', 'Ano', o formas corruptas)
+    for col in df.columns:
+        # Limpiar acentos y espacios para una búsqueda flexible
+        col_lower = col.lower().replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u').replace(' ', '')
         
-        if col_to_rename:
-            # Renombrar la columna encontrada al string literal correcto 'Año'
-            df = df.rename(columns={col_to_rename: 'Año'})
-        else:
-            # Si el error persiste, levantamos una excepción más específica
-            raise KeyError("La columna 'Año' (o su equivalente) no se encontró después de la limpieza. Verifique el nombre exacto de la columna 'Año' en su archivo CSV.") 
+        # Buscar "año", "ano" o su forma corrupta '\xa3o' o '\xf1o'
+        if 'año' == col_lower or 'ano' == col_lower or '\xa3o' in col or '\xf1o' in col:
+            col_to_rename = col
+            break
+
+    if col_to_rename:
+        # Renombrar la columna encontrada al string literal seguro y simple 'Ano'
+        df = df.rename(columns={col_to_rename: 'Ano'})
+    else:
+        # Si el error persiste, levantamos una excepción más específica
+        raise KeyError("La columna del año (esperada 'Año' o 'Ano') no se encontró en el archivo CSV. Verifique que exista una columna con el año al inicio del encabezado.") 
 
     # Pasos de pre-procesamiento idénticos al cuaderno:
 
     # 1. Filtrar por el año máximo (2025)
-    max_anio = df['Año'].max()
-    df = df[df['Año'] == max_anio].copy()
+    max_anio = df['Ano'].max() # CAMBIO A 'Ano'
+    df = df[df['Ano'] == max_anio].copy() # CAMBIO A 'Ano'
 
     # Lista de meses para identificar los meses a conservar
     meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -299,15 +299,18 @@ def upload_csv():
         flash('Por favor, suba un archivo CSV válido.', 'danger')
         return redirect(url_for('dashboard'))
 
-    # Leer el archivo en memoria
-    # Usar .read() y luego io.StringIO para manejar el encoding
+    # Leer el archivo en memoria de forma robusta
+    file_stream = io.StringIO()
     try:
+        # Intento de lectura con latin-1
         file_content = file.stream.read().decode("latin-1")
     except UnicodeDecodeError:
         file.stream.seek(0) # Volver al inicio del stream
+        # Intento de lectura con utf-8
         file_content = file.stream.read().decode("utf-8")
         
-    file_stream = io.StringIO(file_content)
+    file_stream.write(file_content)
+    file_stream.seek(0) # Resetear la posición del puntero para pandas
 
     try:
         # Procesar los datos
@@ -345,6 +348,3 @@ if __name__ == '__main__':
     # Usar un puerto dinámico en Railway
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
-
-
-
