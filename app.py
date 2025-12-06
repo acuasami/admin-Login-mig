@@ -140,9 +140,10 @@ def process_data_for_db(file_stream):
              'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
     # Identificar meses válidos y conservar los últimos 3 con data
+    # (Se utiliza sum() > 0 para asegurar que contengan datos numéricos)
     meses_validos = [mes for mes in meses
                      if mes in df.columns
-                     and df[mes].astype(float).sum() > 0] # Asegurar que tengan datos (suma > 0)
+                     and df[mes].astype(float).sum() > 0] 
     ultimos_3_meses = meses_validos[-3:] if len(meses_validos) >= 3 else meses_validos
     
     # Eliminar columnas de meses no deseados
@@ -176,6 +177,7 @@ def process_data_for_db(file_stream):
     df_agrupado = df.groupby(columnas_agrupacion, dropna=False).sum().reset_index()
 
     # 6. Melt: pasar meses a formato largo
+    # Se usan los meses detectados dinámicamente: ultimos_3_meses
     df_long = df_agrupado.melt(
         id_vars=["Entidad", "Cve. Municipio", "Municipio", "Tipo de delito"],
         value_vars=ultimos_3_meses,
